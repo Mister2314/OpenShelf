@@ -1,6 +1,8 @@
 // Drive access tokens are memory-only and are cleared on account changes.
 let accessToken='',expiresAt=0;
 export function clearDrive(){accessToken='';expiresAt=0;}
+export function isDriveConnected(){return Boolean(accessToken&&Date.now()<expiresAt);}
+export function isDrivePickerConfigured(){return Boolean(import.meta.env.VITE_GOOGLE_API_KEY&&import.meta.env.VITE_GOOGLE_APP_ID);}
 function script(src:string){return new Promise<void>((resolve,reject)=>{const existing=document.querySelector<HTMLScriptElement>(`script[src="${src}"]`);if(existing?.dataset.loaded==='true'){resolve();return;}const tag=existing||document.createElement('script');tag.src=src;tag.onload=()=>{tag.dataset.loaded='true';resolve();};tag.onerror=()=>reject(new Error('Google authorization scripts could not load.'));if(!existing)document.head.append(tag);});}
 // Google SDKs are loaded by their official browser scripts.
 declare global {interface Window {google:any;gapi:any;}}

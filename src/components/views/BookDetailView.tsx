@@ -1,3 +1,28 @@
-import {useReading} from '../../context/ReadingContext';
-import {BookCover} from '../common/BookCard';
-export function BookDetailView(){const {selectedBook:book,openReader,toggleBookShelved,isBookShelved,setCurrentView}=useReading();if(!book.id)return null;return <div className="detail-screen space-y-6"><button onClick={()=>setCurrentView('explore')} className="text-primary">Back to library</button><section className="grid md:grid-cols-[220px_1fr] gap-8 rounded-3xl p-6 sm:p-8 border border-[var(--color-border)] bg-[var(--color-surface-warm)]"><div className="max-w-[220px]"><BookCover book={book} large/></div><div className="space-y-5"><p className="text-xs uppercase tracking-wider">{book.category}</p><h1 className="font-reading text-3xl sm:text-4xl">{book.title}</h1><p>{book.author}</p><p className="font-reading leading-relaxed whitespace-pre-wrap">{book.description}</p><p className="text-sm text-[var(--color-text-secondary)]">EPUB · {book.fileSize}</p><div className="flex flex-wrap gap-3"><button className="px-6 py-3 rounded-full bg-primary text-white" onClick={()=>openReader(book)}>Read EPUB</button><button className="px-6 py-3 rounded-full border border-[var(--color-border)]" onClick={()=>toggleBookShelved(book.id)}>{isBookShelved(book.id)?'Remove from shelf':'Save to shelf'}</button></div><p className="text-sm">Chapter navigation, notes and synthesized speech are available in the reader.</p></div></section></div>;}
+import { ArrowLeft, Bookmark, BookOpen } from 'lucide-react';
+import { useReading } from '../../context/ReadingContext';
+import { BookCover } from '../common/BookCard';
+
+export function BookDetailView() {
+  const { selectedBook: book, openReader, toggleBookShelved, isBookShelved, setCurrentView } = useReading();
+  if (!book.id) return null;
+
+  return (
+    <div className="detail-screen">
+      <button onClick={() => setCurrentView('explore')} className="detail-back"><ArrowLeft size={16} /> Back to library</button>
+      <section className="detail-book">
+        <div className="detail-cover"><BookCover book={book} large /></div>
+        <div className="detail-copy">
+          <span className="eyebrow">{book.category}</span>
+          <h1 className="font-reading">{book.title}</h1>
+          {book.author && <p className="detail-author">{book.author}</p>}
+          {book.description && <p className="detail-description font-reading">{book.description}</p>}
+          <p className="detail-format">{book.format}{book.fileSize ? ` · ${book.fileSize}` : ''}</p>
+          <div className="detail-actions">
+            <button className="os-button os-button-primary" onClick={() => openReader(book)}><BookOpen size={17} /> Read EPUB</button>
+            <button className="os-button" onClick={() => toggleBookShelved(book.id)}><Bookmark size={16} /> {isBookShelved(book.id) ? 'Remove from shelf' : 'Save to shelf'}</button>
+          </div>
+        </div>
+      </section>
+    </div>
+  );
+}

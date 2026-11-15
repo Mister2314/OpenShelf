@@ -75,7 +75,7 @@ export const ReadingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         id:row.id,title:row.title,author:row.author,description:row.description,coverUrl:row.cover_url,
         category:row.categories?.name || 'Uncategorized',status:row.status,
         coverBg:'from-[#2F3A4A] via-[#1E2633] to-[#121822]',coverTextColor:'#FFFFFF',motifType:'shapes',
-        pageCount:0,format:'EPUB',fileSize:row.file_size ? (row.file_size/1048576).toFixed(1)+' MB' : '',
+        pageCount:0,format:'EPUB',fileSize:row.file_size ? (row.file_size<1048576?`${Math.max(1,Math.round(row.file_size/1024))} KB`:`${(row.file_size/1048576).toFixed(1)} MB`) : '',
         progressPercent:0,currentPage:0,currentChapterId:'',currentChapterTitle:'',estReadingTime:'',
         publishedDate:row.created_at,isbn:'',publisher:'',quote:'',shelvedCount:0,chapters:[]
       })));

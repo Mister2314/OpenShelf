@@ -85,7 +85,7 @@ export const AuthModal: React.FC = () => {
                 A quiet harbor for your reading life.
               </h2>
               <p className="font-ui text-sm text-[var(--color-text-secondary)] leading-relaxed pt-1">
-                No algorithmic feeds, notification traps, or gamified streak counters. Just your books, your reflections, and typography crafted for deep contemplation.
+                Keep your books, reading progress, and notes together. Open a story when you have a quiet moment, then pick up where you left off.
               </p>
             </div>
 
