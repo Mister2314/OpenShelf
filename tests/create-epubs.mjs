@@ -1,0 +1,10 @@
+import JSZip from 'jszip';import fs from 'node:fs';
+for(const name of ['garden','sea']){
+ const zip=new JSZip();zip.file('mimetype','application/epub+zip',{compression:'STORE'});
+ zip.file('META-INF/container.xml','<?xml version="1.0"?><container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container"><rootfiles><rootfile full-path="OPS/book.opf" media-type="application/oebps-package+xml"/></rootfiles></container>');
+ zip.file('OPS/book.opf',`<?xml version="1.0"?><package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="uid"><metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:identifier id="uid">urn:openshelf:test:${name}</dc:identifier><dc:title>The ${name}</dc:title><dc:creator>OpenShelf Test</dc:creator><dc:language>en</dc:language><meta property="dcterms:modified">2026-11-15T00:00:00Z</meta></metadata><manifest><item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/><item id="one" href="one.xhtml" media-type="application/xhtml+xml"/><item id="two" href="two.xhtml" media-type="application/xhtml+xml"/></manifest><spine><itemref idref="one"/><itemref idref="two"/></spine></package>`);
+ zip.file('OPS/nav.xhtml','<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops"><head><title>Contents</title></head><body><nav epub:type="toc"><ol><li><a href="one.xhtml">Morning</a></li><li><a href="two.xhtml">Evening</a></li></ol></nav></body></html>');
+ for(const part of ['one','two'])zip.file(`OPS/${part}.xhtml`,`<html xmlns="http://www.w3.org/1999/xhtml"><head><title>${part}</title></head><body><h1>${name}: ${part}</h1>${Array.from({length:25},(_,i)=>`<p>The ${name} was quiet. This is paragraph ${i+1}. A reader can select this sentence, save a note, and return to the same location.</p>`).join('')}</body></html>`);
+ fs.writeFileSync(`tests/fixtures/${name}.epub`,await zip.generateAsync({type:'nodebuffer',compression:'DEFLATE'}));
+}
+console.log('Created two real EPUB 3 archives, each containing a navigation document and two XHTML chapters.');

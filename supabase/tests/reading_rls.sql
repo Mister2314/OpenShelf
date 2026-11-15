@@ -1,0 +1,21 @@
+begin;
+insert into auth.users(id) values ('00000000-0000-4000-8000-000000000011'),('00000000-0000-4000-8000-000000000012');
+insert into public.personal_books(id,user_id,drive_file_id,title) values('00000000-0000-4000-8000-000000000021','00000000-0000-4000-8000-000000000011','test-a','A'),('00000000-0000-4000-8000-000000000022','00000000-0000-4000-8000-000000000012','test-b','B');
+insert into public.bookshelf(id,user_id,personal_book_id) values('00000000-0000-4000-8000-000000000031','00000000-0000-4000-8000-000000000011','00000000-0000-4000-8000-000000000021'),('00000000-0000-4000-8000-000000000032','00000000-0000-4000-8000-000000000012','00000000-0000-4000-8000-000000000022');
+insert into public.reading_progress(shelf_id,user_id,cfi) values('00000000-0000-4000-8000-000000000032','00000000-0000-4000-8000-000000000012','epubcfi(/6/2!/4/2:0)');
+set local role authenticated;
+select set_config('request.jwt.claim.sub','00000000-0000-4000-8000-000000000011',true);
+do $$ begin
+ if public.is_admin() then raise exception 'Nonadmin elevated'; end if;
+ if (select count(*) from public.personal_books)<>1 then raise exception 'Personal book leak'; end if;
+ if exists(select 1 from public.reading_progress) then raise exception 'Progress leak'; end if;
+ begin insert into public.categories(name) values('unauthorized'); raise exception 'Unauthorized admin write'; exception when insufficient_privilege then null;end;
+ begin insert into public.annotations(shelf_id,user_id,kind,cfi) values('00000000-0000-4000-8000-000000000032','00000000-0000-4000-8000-000000000011','note','bad'); raise exception 'Cross owner annotation'; exception when foreign_key_violation then null;end;
+ insert into public.reading_progress(shelf_id,user_id,cfi,percentage) values('00000000-0000-4000-8000-000000000031','00000000-0000-4000-8000-000000000011','epubcfi(/6/2!/4/2:5)',25);
+ if not exists(select 1 from public.reading_progress where percentage=25) then raise exception 'Save restore failed';end if;
+ insert into public.annotations(shelf_id,user_id,kind,cfi,excerpt) values('00000000-0000-4000-8000-000000000031','00000000-0000-4000-8000-000000000011','highlight','epubcfi(/6/2!/4/2:5)','test excerpt');
+ insert into public.vocabulary(shelf_id,user_id,word,context) values('00000000-0000-4000-8000-000000000031','00000000-0000-4000-8000-000000000011','test','test excerpt');
+ if (select count(*) from public.annotations)<>1 or (select count(*) from public.vocabulary)<>1 then raise exception 'Annotation save failed';end if;
+end $$;
+select 'PASS: nonadmin denial, private book isolation, progress isolation, cross-owner FK, CFI roundtrip, annotation and vocabulary writes' as test_result;
+rollback;
