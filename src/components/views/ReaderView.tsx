@@ -3,11 +3,12 @@ import ePub from 'epubjs';
 import type { Rendition, Contents } from 'epubjs';
 import type { Location } from 'epubjs/types/rendition';
 import type { NavItem } from 'epubjs/types/navigation';
-import { ArrowLeft, Bookmark, ChevronLeft, ChevronRight, Type, Volume2 } from 'lucide-react';
+import { ArrowLeft, Bookmark, ChevronLeft, ChevronRight, Type, Volume2, X } from 'lucide-react';
 import { useReading } from '../../context/ReadingContext';
 import { driveFile } from '../../lib/drive';
 import { database } from '../../lib/supabase';
 import { shelfFor, storageRequest } from '../../lib/reading';
+import { userError } from '../../lib/user-error';
 
 type Annotation={id:string;kind:string;cfi:string;excerpt:string;note:string};
 const button='px-4 py-2 rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] hover:opacity-80 disabled:opacity-40';
@@ -25,7 +26,7 @@ export function ReaderView(){
  useEffect(()=>{if(!window.speechSynthesis)return;const load=()=>setVoices(window.speechSynthesis.getVoices());load();window.speechSynthesis.addEventListener('voiceschanged',load);return()=>{window.speechSynthesis.removeEventListener('voiceschanged',load);window.speechSynthesis.cancel();};},[]);
  useEffect(()=>{
   let alive=true;const book=ePub();let queue=Promise.resolve();
-  const fail=(e:unknown)=>{if(alive){setError((e && typeof e==='object' && 'message' in e) ? String(e.message) : String(e));setStatus('');}};
+  const fail=(e:unknown)=>{if(alive){setError(userError(e,'This EPUB couldn’t be opened. Check your connection and try again.'));setStatus('');}};
   void(async()=>{
    try{
     if(!host.current)return;
@@ -82,7 +83,7 @@ export function ReaderView(){
   try{if(!shelf.current)throw new Error('Sign in to save annotations.');const cfi=kind==='bookmark'?position.current:selection.cfi;if(!cfi)throw new Error('Select text first.');
    const {data,error}=await database().from('annotations').insert({shelf_id:shelf.current.id,user_id:shelf.current.user_id,kind,cfi,excerpt:selection.text,note}).select().single();if(error)throw error;
    setNotes(items=>[data,...items]);if(kind==='highlight')rendition.current?.annotations.highlight(cfi);setStatus('Annotation saved.');setNote('');
-  }catch(e){setError((e && typeof e==='object' && 'message' in e) ? String(e.message) : String(e));}
+  }catch(e){setError(userError(e));}
  };
  const vocabulary=async()=>{
   try{if(!shelf.current)throw new Error('Sign in first.');const word=selection.text.trim();if(!word||word.length>120)throw new Error('Select a word or short phrase.');
@@ -90,7 +91,7 @@ export function ReaderView(){
    try{const response=await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(word)}`);if(response.ok){const entries=await response.json();definition=entries[0]?.meanings?.[0]?.definitions?.[0]?.definition||null;source_url=entries[0]?.sourceUrls?.[0]||null;}}catch{/* Word can still be saved without a definition. */}
    const {error}=await database().from('vocabulary').insert({shelf_id:shelf.current.id,user_id:shelf.current.user_id,word,context:selection.context,definition,source_url});if(error)throw error;
    setStatus(definition?'Word saved.':'Word saved. English definition unavailable.');
-  }catch(e){setError((e && typeof e==='object' && 'message' in e) ? String(e.message) : String(e));}
+  }catch(e){setError(userError(e));}
  };
  const speak=(text:string)=>{
   stop();if(!window.speechSynthesis){setError('Speech synthesis is unavailable in this browser.');return;}
@@ -98,17 +99,17 @@ export function ReaderView(){
   const generation=speechGeneration.current;let index=0;
   const next=()=>{if(generation!==speechGeneration.current)return;if(index>=chunks.length){setSpeechState('stopped');return;}const utterance=new SpeechSynthesisUtterance(chunks[index++]);utterance.rate=rate;utterance.voice=voices.find(v=>v.voiceURI===voice)||null;utterance.onend=next;utterance.onerror=e=>{if(e.error!=='interrupted'&&e.error!=='canceled')setError(`Speech: ${e.error}`);setSpeechState('stopped');};window.speechSynthesis.speak(utterance);};setSpeechState('playing');next();
  };
- const navigate=(action:()=>Promise<void>|undefined)=>{stop();setSelection({cfi:'',text:'',context:''});void action()?.catch(e=>setError(String(e)));};
+ const navigate=(action:()=>Promise<void>|undefined)=>{stop();setSelection({cfi:'',text:'',context:''});void action()?.catch(e=>setError(userError(e)));};
  return <div className="reader-screen text-[var(--color-ink)]">
   <header className="flex flex-wrap items-center justify-between gap-3 p-4 border-b border-[var(--color-border)]"><button className={button} onClick={()=>setCurrentView('my-shelf')}><ArrowLeft size={18}/></button><div className="flex-1 min-w-0"><h1 className="font-reading truncate">{selectedBook.title}</h1><p className="text-xs">{selectedBook.author}</p></div><button className={button} onClick={()=>void save('bookmark')} aria-label="Bookmark"><Bookmark size={18}/></button><button className={button} onClick={()=>setSettings(!settings)} aria-label="Reading settings"><Type size={18}/></button></header>
-  {error&&<p role="alert" className="p-4 text-red-600">{error}</p>}<p role="status" className="text-xs px-5 py-2">{status}</p>
+  {error&&<p role="alert" className="app-inline-alert">{error}</p>}<p role="status" className="text-xs px-5 py-2">{status}</p>
   <div className="max-w-[1240px] mx-auto px-4"><select aria-label="Chapter" className={button+' max-w-full'} onChange={e=>navigate(()=>rendition.current?.display(e.target.value))}><option value="">Table of contents</option>{toc.flatMap(function flatten(item):NavItem[]{return [item,...(item.subitems||[]).flatMap(flatten)];}).map(item=><option key={item.id} value={item.href}>{item.label}</option>)}</select>
   {settings&&<div className="flex flex-wrap gap-4 py-4"><label>Font size<input type="range" min="16" max="30" value={readingSettings.fontSize} onChange={e=>updateReadingSettings({fontSize:+e.target.value})}/></label><select aria-label="Typeface" value={readingSettings.typeface} onChange={e=>updateReadingSettings({typeface:e.target.value as typeof readingSettings.typeface})}>{['Lora','DM Sans','Georgia'].map(x=><option key={x}>{x}</option>)}</select><select aria-label="Reader theme" value={readingSettings.canvasPalette} onChange={e=>updateReadingSettings({canvasPalette:e.target.value as typeof readingSettings.canvasPalette})}>{['cream','white','charcoal','amber'].map(x=><option key={x}>{x}</option>)}</select><label>Line spacing<input type="range" min="1.3" max="2.2" step="0.1" value={readingSettings.lineHeight} onChange={e=>updateReadingSettings({lineHeight:+e.target.value})}/></label><select aria-label="Reading width" value={readingSettings.columnWidth} onChange={e=>updateReadingSettings({columnWidth:e.target.value as typeof readingSettings.columnWidth})}>{['narrow','normal','wide'].map(x=><option key={x}>{x}</option>)}</select></div>}
   <div ref={host} className="reader-pages mx-auto my-5 overflow-hidden rounded-2xl border border-[var(--color-border)]" style={{maxWidth:{narrow:580,normal:720,wide:860}[readingSettings.columnWidth]}}/>
   <div className="flex justify-between"><button className={button} onClick={()=>navigate(()=>rendition.current?.prev())}><ChevronLeft/>Previous</button><button className={button} onClick={()=>navigate(()=>rendition.current?.next())}>Next<ChevronRight/></button></div>
-  {selection.text&&<section className="my-5 p-5 rounded-2xl bg-[var(--color-surface-warm)] space-y-3"><blockquote className="font-reading">{selection.text}</blockquote><div className="flex flex-wrap gap-2"><button className={button} onClick={()=>void save('highlight')}>Highlight</button><button className={button} onClick={()=>void vocabulary()}>Save word</button><button className={button} onClick={()=>speak(selection.text)}>Read selection</button></div><textarea aria-label="Note" className="w-full p-3 border rounded-xl" value={note} onChange={e=>setNote(e.target.value)} maxLength={10000}/><button className={button} onClick={()=>void save('note')}>Save note</button></section>}
+  {selection.text&&<section className="selection-dock" aria-label="Selected passage actions"><div className="selection-dock-heading"><span>SELECTED PASSAGE</span><button className="icon-button" aria-label="Dismiss selection actions" onClick={()=>{setSelection({cfi:'',text:'',context:''});setNote('');}}><X size={18}/></button></div><blockquote className="font-reading">{selection.text}</blockquote><div className="selection-dock-actions"><button className={`${button} selection-primary`} onClick={()=>void save('highlight')}>Highlight</button><button className={button} onClick={()=>void vocabulary()}>Save word</button><button className={button} onClick={()=>speak(selection.text)}>Read selection</button></div><div className="selection-note"><textarea aria-label="Note for selected passage" placeholder="Add a note…" value={note} onChange={e=>setNote(e.target.value)} maxLength={10000}/><button className={button} onClick={()=>void save('note')}>Save note</button></div></section>}
   <section className="my-5 p-5 rounded-2xl border border-[var(--color-border)]"><h2 className="font-reading mb-3">Synthesized speech</h2><div className="flex flex-wrap gap-3"><button className={button} onClick={()=>speak(chapterText.current)}><Volume2 size={16}/>Read chapter</button><button className={button} disabled={speechState==='stopped'} onClick={()=>{if(speechState==='paused'){window.speechSynthesis.resume();setSpeechState('playing');}else{window.speechSynthesis.pause();setSpeechState('paused');}}}>{speechState==='paused'?'Resume':'Pause'}</button><button className={button} onClick={stop}>Stop</button><select aria-label="Speech speed" value={rate} onChange={e=>{stop();setRate(+e.target.value);}}>{[0.75,1,1.25,1.5,2].map(x=><option key={x} value={x}>{x}x</option>)}</select><select aria-label="Voice" className="max-w-full" value={voice} onChange={e=>{stop();setVoice(e.target.value);}}><option value="">Default voice</option>{voices.map(v=><option key={v.voiceURI} value={v.voiceURI}>{v.name}</option>)}</select></div></section>
-  <section className="space-y-3 py-5"><h2 className="font-reading text-xl">Bookmarks & notes</h2>{notes.map(item=><div className="p-4 border rounded-xl" key={item.id}><button onClick={()=>navigate(()=>rendition.current?.display(item.cfi))}>{item.kind}: {item.excerpt||'Reading position'}</button><p>{item.note}</p><button className={button} onClick={async()=>{const {error}=await database().from('annotations').delete().eq('id',item.id);if(error){setError(error.message);return;}rendition.current?.annotations.remove(item.cfi,'highlight');setNotes(items=>items.filter(x=>x.id!==item.id));}}>Remove</button></div>)}</section>
+  <section className="space-y-3 py-5"><h2 className="font-reading text-xl">Bookmarks & notes</h2>{notes.map(item=><div className="p-4 border rounded-xl" key={item.id}><button onClick={()=>navigate(()=>rendition.current?.display(item.cfi))}>{item.kind}: {item.excerpt||'Reading position'}</button><p>{item.note}</p><button className={button} onClick={async()=>{const {error}=await database().from('annotations').delete().eq('id',item.id);if(error){setError(userError(error));return;}rendition.current?.annotations.remove(item.cfi,'highlight');setNotes(items=>items.filter(x=>x.id!==item.id));}}>Remove</button></div>)}</section>
   </div></div>;
 }
 

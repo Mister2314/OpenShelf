@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { database } from '../../lib/supabase';
 import { useReading } from '../../context/ReadingContext';
 import { X, Check, ArrowRight, Sparkles, Shield, Mail } from 'lucide-react';
+import { userError } from '../../lib/user-error';
 
 export const AuthModal: React.FC = () => {
   const { isAuthModalOpen, closeAuthModal, login } = useReading();
@@ -29,12 +30,12 @@ export const AuthModal: React.FC = () => {
         if(error) throw error;
         if(!data.session) setNotice('Check your email to confirm your account.');
       } else await login(email,password);
-    } catch(error) {setError((error && typeof error==='object' && 'message' in error) ? String(error.message) : String(error));}
+    } catch(error) {setError(userError(error,'We couldn’t complete sign in. Please try again.'));}
     finally {setBusy(false);}
   };
   const googleLogin=async()=> {
     try {const {error}=await database().auth.signInWithOAuth({provider:'google',options:{redirectTo:window.location.origin}});if(error) throw error;}
-    catch(error) {setError((error && typeof error==='object' && 'message' in error) ? String(error.message) : String(error));}
+    catch(error) {setError(userError(error,'Google sign in couldn’t start. Please try again.'));}
   };
   return (
     <div 
@@ -175,7 +176,7 @@ export const AuthModal: React.FC = () => {
               </span>
             </div>
 
-            {error && <p role="alert" className="text-red-600 py-3">{error}</p>}{notice && <p role="status" className="py-3">{notice}</p>}
+            {error && <p role="alert" className="app-inline-alert">{error}</p>}{notice && <p role="status" className="py-3">{notice}</p>}
             {/* Form */}
             {magicLinkSent ? (
               <div className="p-6 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-center space-y-2">

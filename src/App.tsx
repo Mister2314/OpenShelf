@@ -14,7 +14,7 @@ const AdminView = React.lazy(()=>import('./components/views/AdminView').then(m=>
 const MyShelfView = React.lazy(()=>import('./components/views/MyShelfView').then(m=>({default:m.MyShelfView})));
 
 const MainContent: React.FC = () => {
-  const { currentView, authError, authLoading, currentUser } = useReading();
+  const { currentView, authError, authLoading, currentUser, catalogError, catalogLoading, retryCatalog, openAuthModal } = useReading();
 
   return (
     <div className="min-h-screen flex flex-col bg-[var(--color-canvas)] text-[var(--color-ink)] transition-colors duration-200">
@@ -24,7 +24,8 @@ const MainContent: React.FC = () => {
       {/* Main Content Area */}
       <main className={`app-main flex-1 ${currentView !== 'reader' ? 'pt-[72px] pb-16 md:pb-0' : ''}`}>
         <React.Suspense fallback={<p role="status" className="p-8">Loading…</p>}>
-        {authError && <p role="alert" className="p-5 text-red-600">{authError}</p>}
+        {(authError || catalogError) && <div role="alert" className="app-feedback"><p>{catalogError ? 'We couldn’t load the library. Check your connection and try again.' : 'We couldn’t connect to your account. Please sign in again.'}</p>{catalogError ? <button className="os-button" onClick={retryCatalog}>Try again</button> : <button className="os-button" onClick={openAuthModal}>Sign in</button>}</div>}
+        {catalogLoading && currentView === 'explore' && <p role="status" className="catalog-loading">Finding books for you…</p>}
         {authLoading && <p role="status" className="p-5">Loading account…</p>}
         {currentView === 'explore' && <ExploreView />}
         {currentView === 'book-detail' && <BookDetailView />}

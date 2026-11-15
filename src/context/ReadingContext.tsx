@@ -3,6 +3,7 @@ import type { Book, ReadingSettings, ViewState } from '../types';
 
 import { clearDrive } from '../lib/drive';
 import { database, supabase } from '../lib/supabase';
+import { userError } from '../lib/user-error';
 
 interface User {
   name: string;
@@ -37,6 +38,9 @@ interface ReadingContextType {
   login: (email: string, password: string) => Promise<void>;
   authError: string;
   authLoading: boolean;
+  catalogError: string;
+  catalogLoading: boolean;
+  retryCatalog: () => void;
   logout: () => void;
 
   // Search & Filter
@@ -52,6 +56,9 @@ const ReadingContext = createContext<ReadingContextType | undefined>(undefined);
 export const ReadingProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [currentView, setCurrentView] = useState<ViewState>('explore');
   const [authError, setAuthError] = useState('');
+  const [catalogError, setCatalogError] = useState(supabase ? '' : 'Library service is unavailable.');
+  const [catalogLoading, setCatalogLoading] = useState(Boolean(supabase));
+  const [catalogRetry, setCatalogRetry] = useState(0);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [books,setBooks]=useState<Book[]>([]);
   const [selectedBook,setSelectedBook]=useState<Book>({} as Book);
@@ -62,7 +69,8 @@ export const ReadingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     void (async()=> {
       const {data,error}=await database().from('books').select('*, categories(name)').eq('status','published').order('created_at',{ascending:false});
       if(!alive) return;
-      if(error) {setAuthError(error.message);return;}
+      if(error) {setCatalogError(error.message);setCatalogLoading(false);return;}
+      setCatalogError('');
       setBooks((data || []).map(row=>({
         id:row.id,title:row.title,author:row.author,description:row.description,coverUrl:row.cover_url,
         category:row.categories?.name || 'Uncategorized',status:row.status,
@@ -71,9 +79,10 @@ export const ReadingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         progressPercent:0,currentPage:0,currentChapterId:'',currentChapterTitle:'',estReadingTime:'',
         publishedDate:row.created_at,isbn:'',publisher:'',quote:'',shelvedCount:0,chapters:[]
       })));
+      setCatalogLoading(false);
     })();
     return ()=>{alive=false;};
-  },[currentView]);
+  },[currentView,catalogRetry]);
 
   const [readingSettings, setReadingSettings] = useState<ReadingSettings>(() => {
     try {
@@ -134,7 +143,7 @@ export const ReadingProvider: React.FC<{ children: React.ReactNode }> = ({ child
           ...(['narrow','normal','wide'].includes(settings.columnWidth)?{columnWidth:settings.columnWidth}:{})
         }));
         setIsAuthenticated(true); setIsAuthModalOpen(false);
-      } catch(error) { if(alive && run===generation) setAuthError((error && typeof error==='object' && 'message' in error) ? String(error.message) : String(error)); }
+      } catch(error) { if(alive && run===generation) setAuthError(userError(error,'We couldn’t connect to your account. Please sign in again.')); }
       finally { if(alive && run===generation) setAuthLoading(false); }
     };
     const {data:{subscription}} = supabase.auth.onAuthStateChange((event,session)=> {
@@ -151,7 +160,7 @@ export const ReadingProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const updateReadingSettings = (newSettings:Partial<ReadingSettings>) => {
     const updated={...readingSettings,...newSettings};setReadingSettings(updated);
     if(!isAuthenticated)return;
-    void(async()=>{const db=database();const {data:{user}}=await db.auth.getUser();if(!user)return;const {error}=await db.from('profiles').update({settings:updated}).eq('id',user.id);if(error)setAuthError(error.message);})().catch(e=>setAuthError(String(e)));
+    void(async()=>{const db=database();const {data:{user}}=await db.auth.getUser();if(!user)return;const {error}=await db.from('profiles').update({settings:updated}).eq('id',user.id);if(error)setAuthError(userError(error));})().catch(e=>setAuthError(userError(e)));
   };
 
   const openBookDetail = (book: Book) => {
@@ -178,7 +187,7 @@ export const ReadingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         const {error}=await db.from('bookshelf').insert({user_id:user.id,book_id:bookId});if(error) throw error;
         setShelvedBookIds(ids=>[...ids,bookId]);
       }
-    } catch(error) {setAuthError((error && typeof error==='object' && 'message' in error) ? String(error.message) : String(error));}
+    } catch(error) {setAuthError(userError(error));}
   };
 
   const isBookShelved = (bookId: string) => {
@@ -191,7 +200,7 @@ export const ReadingProvider: React.FC<{ children: React.ReactNode }> = ({ child
   };
   const logout = async () => {
     const {error}=await database().auth.signOut();
-    if(error) {setAuthError(error.message);return;}
+    if(error) {setAuthError(userError(error));return;}
     setCurrentUser(null);setIsAuthenticated(false);setCurrentView('explore');
   };
 
@@ -217,6 +226,9 @@ export const ReadingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         login,
         authError,
         authLoading,
+        catalogError,
+        catalogLoading,
+        retryCatalog: () => { setCatalogError(''); setCatalogLoading(true); setCatalogRetry(value => value + 1); },
         logout,
         searchQuery,
         setSearchQuery,
