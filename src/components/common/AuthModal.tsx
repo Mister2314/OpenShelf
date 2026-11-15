@@ -38,16 +38,30 @@ export const AuthModal: React.FC = () => {
   };
   return (
     <div 
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200"
+      className="auth-overlay"
       onClick={closeAuthModal}
     >
       <div 
-        className="relative w-full max-w-4xl bg-[var(--color-surface)] rounded-3xl shadow-2xl border border-[var(--color-border)] overflow-hidden flex flex-col md:flex-row max-h-[92vh] overflow-y-auto"
+        className="auth-panel relative w-full max-w-4xl bg-[var(--color-surface)] rounded-3xl shadow-2xl border border-[var(--color-border)] overflow-hidden flex flex-col md:flex-row max-h-[92vh] overflow-y-auto"
+        role="dialog"
+        aria-modal="true"
+        aria-label={authMode === 'signin' ? 'Sign in to OpenShelf' : 'Create an OpenShelf account'}
         onClick={(e) => e.stopPropagation()}
+        onKeyDown={(event) => {
+          if (event.key === 'Escape') { closeAuthModal(); return; }
+          if (event.key !== 'Tab') return;
+          const focusable = event.currentTarget.querySelectorAll<HTMLElement>('button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), a[href]');
+          if (!focusable.length) return;
+          const first = focusable[0], last = focusable[focusable.length - 1];
+          if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+          else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+        }}
       >
         {/* Close Button */}
         <button
           onClick={closeAuthModal}
+          aria-label="Close sign-in dialog"
+          autoFocus
           className="absolute top-4 right-4 z-20 w-9 h-9 rounded-full bg-[var(--color-surface-warm)] hover:bg-[var(--color-surface-container)] flex items-center justify-center text-[var(--color-text-secondary)] hover:text-[var(--color-ink)] transition-colors shadow-sm"
         >
           <X className="w-5 h-5" />
