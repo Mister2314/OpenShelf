@@ -1,4 +1,5 @@
 import React from 'react';
+import { BookOpen } from 'lucide-react';
 import { ThemeProvider } from './context/ThemeContext';
 import { ReadingProvider, useReading } from './context/ReadingContext';
 import { Header } from './components/common/Header';
@@ -8,13 +9,16 @@ import { AuthModal } from './components/common/AuthModal';
 import { ExploreView } from './components/views/ExploreView';
 import { BookDetailView } from './components/views/BookDetailView';
 import { SavedWordsView } from './components/views/SavedWordsView';
+import { NotificationProvider } from './context/NotificationContext';
 
 const ReaderView = React.lazy(()=>import('./components/views/ReaderView').then(m=>({default:m.ReaderView})));
 const AdminView = React.lazy(()=>import('./components/views/AdminView').then(m=>({default:m.AdminView})));
 const MyShelfView = React.lazy(()=>import('./components/views/MyShelfView').then(m=>({default:m.MyShelfView})));
 
 const MainContent: React.FC = () => {
-  const { currentView, authError, authLoading, currentUser, catalogError, catalogLoading, retryCatalog, openAuthModal } = useReading();
+  const { currentView, authError, currentUser, catalogError, catalogLoading, retryCatalog, openAuthModal, authLoading } = useReading();
+
+  if (authLoading) return <div className="app-boot-state" role="status" aria-live="polite"><span className="app-boot-mark"><BookOpen size={22}/></span><span>Restoring your reading space…</span></div>;
 
   return (
     <div className="min-h-screen flex flex-col bg-[var(--color-canvas)] text-[var(--color-ink)] transition-colors duration-200">
@@ -26,7 +30,6 @@ const MainContent: React.FC = () => {
         <React.Suspense fallback={<p role="status" className="p-8">Loading…</p>}>
         {(authError || catalogError) && <div role="alert" className="app-feedback"><p>{catalogError ? 'We couldn’t load the library. Check your connection and try again.' : 'We couldn’t connect to your account. Please sign in again.'}</p>{catalogError ? <button className="os-button" onClick={retryCatalog}>Try again</button> : <button className="os-button" onClick={openAuthModal}>Sign in</button>}</div>}
         {catalogLoading && currentView === 'explore' && <p role="status" className="catalog-loading">Finding books for you…</p>}
-        {authLoading && <p role="status" className="p-5">Loading account…</p>}
         {currentView === 'explore' && <ExploreView />}
         {currentView === 'book-detail' && <BookDetailView />}
         {currentView === 'my-shelf' && <MyShelfView key={currentUser?.email || 'guest'} />}
@@ -51,9 +54,11 @@ const MainContent: React.FC = () => {
 export function App() {
   return (
     <ThemeProvider>
-      <ReadingProvider>
-        <MainContent />
-      </ReadingProvider>
+      <NotificationProvider>
+        <ReadingProvider>
+          <MainContent />
+        </ReadingProvider>
+      </NotificationProvider>
     </ThemeProvider>
   );
 }

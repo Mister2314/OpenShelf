@@ -82,10 +82,10 @@ export const AuthModal: React.FC = () => {
                 Welcome to OpenShelf
               </span>
               <h2 className="font-reading text-2xl sm:text-3xl text-[var(--color-ink)] font-normal leading-tight">
-                A quiet harbor for your reading life.
+                  Make room for the books that stay with you.
               </h2>
               <p className="font-ui text-sm text-[var(--color-text-secondary)] leading-relaxed pt-1">
-                Keep your books, reading progress, and notes together. Open a story when you have a quiet moment, then pick up where you left off.
+                  Keep your shelf, reading progress, and notes together. Come back to your book whenever you’re ready.
               </p>
             </div>
 
@@ -96,7 +96,7 @@ export const AuthModal: React.FC = () => {
                   <Check className="w-3.5 h-3.5" />
                 </div>
                 <span className="text-xs text-[var(--color-text-secondary)]">
-                  Access your account across devices.
+                  Keep your shelf available across sessions.
                 </span>
               </div>
               <div className="flex items-start gap-3">
@@ -104,7 +104,7 @@ export const AuthModal: React.FC = () => {
                   <Check className="w-3.5 h-3.5" />
                 </div>
                 <span className="text-xs text-[var(--color-text-secondary)]">
-                  Private data uses account-based access.
+                  Save reading progress and notes to your account.
                 </span>
               </div>
               <div className="flex items-start gap-3">
@@ -112,7 +112,7 @@ export const AuthModal: React.FC = () => {
                   <Check className="w-3.5 h-3.5" />
                 </div>
                 <span className="text-xs text-[var(--color-text-secondary)]">
-                  Personal reading settings and notes.
+                  Return to your saved books and words.
                 </span>
               </div>
             </div>
@@ -120,7 +120,7 @@ export const AuthModal: React.FC = () => {
 
           <div className="pt-8 text-[11px] text-[var(--color-text-tertiary)] flex items-center gap-1.5">
             <Shield className="w-3.5 h-3.5 text-primary" />
-            <span>Open standard • Account-based access</span>
+            <span>Shelf · Progress · Notes · Words</span>
           </div>
         </div>
 
@@ -128,10 +128,11 @@ export const AuthModal: React.FC = () => {
         <div className="md:w-7/12 p-8 sm:p-10 flex flex-col justify-between">
           <div>
             {/* Segmented Pill Tab Switcher */}
-            <div className="flex items-center gap-1.5 bg-[var(--color-surface-warm)] p-1 rounded-full w-fit mb-6">
+            <div className="auth-mode-switch" role="group" aria-label="Account action">
               <button
                 type="button"
                 onClick={() => setAuthMode('signin')}
+                aria-pressed={authMode === 'signin'}
                 className={`px-5 py-2 rounded-full text-xs font-semibold transition-all ${
                   authMode === 'signin'
                     ? 'bg-primary text-white shadow-sm'
@@ -143,6 +144,7 @@ export const AuthModal: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setAuthMode('signup')}
+                aria-pressed={authMode === 'signup'}
                 className={`px-5 py-2 rounded-full text-xs font-semibold transition-all ${
                   authMode === 'signup'
                     ? 'bg-primary text-white shadow-sm'
@@ -192,44 +194,44 @@ export const AuthModal: React.FC = () => {
               <form onSubmit={handleSubmit} className="space-y-4">
                 {authMode === 'signup' && (
                   <div>
-                    <label className="block text-xs font-semibold text-[var(--color-ink)] mb-1.5">
+                    <label htmlFor="auth-name" className="block text-xs font-semibold text-[var(--color-ink)] mb-1.5">
                       Your Name
                     </label>
                     <input
-                      type="text"
+                      id="auth-name" autoComplete="name" type="text"
                       required
                       value={name}
                       onChange={(e) => setName(e.target.value)}
-                      placeholder="Elena Vance"
+                      placeholder="Your name"
                       className="w-full h-12 px-4 rounded-xl bg-[var(--color-surface-warm)] border border-[var(--color-border)] text-sm text-[var(--color-ink)] focus:outline-none focus:ring-2 focus:ring-primary focus:bg-[var(--color-surface)] transition-all"
                     />
                   </div>
                 )}
 
                 <div>
-                  <label className="block text-xs font-semibold text-[var(--color-ink)] mb-1.5">
+                  <label htmlFor="auth-email" className="block text-xs font-semibold text-[var(--color-ink)] mb-1.5">
                     Email address
                   </label>
                   <input
-                    type="email"
+                    id="auth-email" autoComplete="email" type="email"
                     required
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    placeholder="elena@solitude.org"
+                      placeholder="you@example.com"
                     className="w-full h-12 px-4 rounded-xl bg-[var(--color-surface-warm)] border border-[var(--color-border)] text-sm text-[var(--color-ink)] focus:outline-none focus:ring-2 focus:ring-primary focus:bg-[var(--color-surface)] transition-all"
                   />
                 </div>
 
                 {!useMagicLink && (
                   <div>
-                    <div className="flex items-center justify-between mb-1.5">
-                      <label className="text-xs font-semibold text-[var(--color-ink)]">
+                    <div className="auth-password-label">
+                      <label htmlFor="auth-password" className="text-xs font-semibold text-[var(--color-ink)]">
                         Password
                       </label>
-                      <span className="text-xs text-[var(--color-text-secondary)]">Use a magic link if you forgot your password.</span>
+                      <span className="text-xs text-[var(--color-text-secondary)]">Prefer passwordless? Use a magic link.</span>
                     </div>
                     <input
-                      type="password" required minLength={8}
+                      id="auth-password" autoComplete={authMode === 'signup' ? 'new-password' : 'current-password'} type="password" required minLength={8}
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       placeholder="••••••••••••"
@@ -255,7 +257,7 @@ export const AuthModal: React.FC = () => {
                   type="submit" disabled={busy}
                   className="w-full h-12 rounded-full bg-primary hover:bg-[#294899] text-white text-sm font-semibold flex items-center justify-center gap-2 shadow-md hover:shadow-lg transition-all active:translate-y-0.5 mt-2"
                 >
-                  <span>{authMode === 'signin' ? 'Sign in to your library' : 'Create reading sanctuary'}</span>
+                  <span>{authMode === 'signin' ? 'Sign in to your library' : 'Create account'}</span>
                   <ArrowRight className="w-4 h-4" />
                 </button>
               </form>
@@ -264,7 +266,7 @@ export const AuthModal: React.FC = () => {
 
           {/* Privacy Sanctuary Reassurance Note */}
           <p className="text-[11px] text-[var(--color-text-tertiary)] text-center pt-6 leading-relaxed">
-            By entering OpenShelf, you choose an ad-free, quiet reading space. We never sell reading habits or distribute reader annotations.
+            Signing in connects your shelf, progress, notes, and saved words to your OpenShelf account.
           </p>
         </div>
       </div>

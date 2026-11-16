@@ -1,9 +1,11 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { flushSync } from 'react-dom';
 import type { Book, ReadingSettings, ViewState } from '../types';
 
 import { clearDrive } from '../lib/drive';
 import { database, supabase } from '../lib/supabase';
 import { userError } from '../lib/user-error';
+import { useNotifications } from './NotificationContext';
 
 interface User {
   name: string;
@@ -52,16 +54,21 @@ interface ReadingContextType {
 
 const ReadingContext = createContext<ReadingContextType | undefined>(undefined);
 
+function cachedCatalog():Book[]{
+  try{const value=localStorage.getItem('openshelf_catalog_cache');const parsed=value?JSON.parse(value):[];return Array.isArray(parsed)?parsed as Book[]:[];}catch{return [];}
+}
+
 
 export const ReadingProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [currentView, setCurrentView] = useState<ViewState>('explore');
+  const { notify } = useNotifications();
+  const [currentView, setCurrentView] = useState<ViewState>(()=>{try{const saved=localStorage.getItem('openshelf_current_view');return saved&&['explore','book-detail','my-shelf','reader','saved-words','admin'].includes(saved)?saved as ViewState:'explore';}catch{return 'explore';}});
   const [authError, setAuthError] = useState('');
   const [catalogError, setCatalogError] = useState(supabase ? '' : 'Library service is unavailable.');
-  const [catalogLoading, setCatalogLoading] = useState(Boolean(supabase));
+  const [catalogLoading, setCatalogLoading] = useState(()=>Boolean(supabase)&&cachedCatalog().length===0);
   const [catalogRetry, setCatalogRetry] = useState(0);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
-  const [books,setBooks]=useState<Book[]>([]);
-  const [selectedBook,setSelectedBook]=useState<Book>({} as Book);
+  const [books,setBooks]=useState<Book[]>(cachedCatalog);
+  const [selectedBook,setSelectedBook]=useState<Book>(()=>{try{const saved=localStorage.getItem('openshelf_selected_book');return saved?JSON.parse(saved) as Book:{} as Book;}catch{return {} as Book;}});
   const [shelvedBookIds,setShelvedBookIds]=useState<string[]>([]);
   useEffect(()=> {
     if(!supabase) return;
@@ -71,18 +78,23 @@ export const ReadingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       if(!alive) return;
       if(error) {setCatalogError(error.message);setCatalogLoading(false);return;}
       setCatalogError('');
-      setBooks((data || []).map(row=>({
+      const catalog:Book[]=(data || []).map(row=>({
         id:row.id,title:row.title,author:row.author,description:row.description,coverUrl:row.cover_url,
         category:row.categories?.name || 'Uncategorized',status:row.status,
         coverBg:'from-[#2F3A4A] via-[#1E2633] to-[#121822]',coverTextColor:'#FFFFFF',motifType:'shapes',
         pageCount:0,format:'EPUB',fileSize:row.file_size ? (row.file_size<1048576?`${Math.max(1,Math.round(row.file_size/1024))} KB`:`${(row.file_size/1048576).toFixed(1)} MB`) : '',
         progressPercent:0,currentPage:0,currentChapterId:'',currentChapterTitle:'',estReadingTime:'',
         publishedDate:row.created_at,isbn:'',publisher:'',quote:'',shelvedCount:0,chapters:[]
-      })));
+      }));
+      setBooks(catalog);
+      try{localStorage.setItem('openshelf_catalog_cache',JSON.stringify(catalog));}catch{/* The live catalog remains available when storage is full. */}
       setCatalogLoading(false);
     })();
     return ()=>{alive=false;};
-  },[currentView,catalogRetry]);
+  },[catalogRetry]);
+
+  useEffect(()=>{try{localStorage.setItem('openshelf_current_view',currentView);}catch{/* Storage may be unavailable. */}},[currentView]);
+  useEffect(()=>{try{if(selectedBook?.id)localStorage.setItem('openshelf_selected_book',JSON.stringify(selectedBook));}catch{/* Storage may be unavailable. */}},[selectedBook]);
 
   const [readingSettings, setReadingSettings] = useState<ReadingSettings>(() => {
     try {
@@ -109,13 +121,22 @@ export const ReadingProvider: React.FC<{ children: React.ReactNode }> = ({ child
   useEffect(() => {
     if (!supabase) { setAuthError('Supabase configuration is missing.'); setAuthLoading(false); return; }
     let generation = 0, alive = true;
+    let authInitialized=false;
     let previousUserId:string|undefined;
-    const sync = async (user: import('@supabase/supabase-js').User | null) => {
+    const sync = async (user: import('@supabase/supabase-js').User | null, event?: string) => {
+      const firstAuthEvent=!authInitialized;
+      const sameIdentity=previousUserId===user?.id;
+      if(authInitialized&&sameIdentity)return;
+      authInitialized=true;
       const run = ++generation;
       if(previousUserId!==user?.id)clearDrive();
       previousUserId=user?.id;
       setCurrentUser(null); setShelvedBookIds([]); setIsAuthenticated(false); setAuthLoading(true); setAuthError('');
-      if (!user) { setCurrentView('explore'); setAuthLoading(false); return; }
+      if (!user) { setAuthLoading(false); return; }
+      const fallbackName=String(user.user_metadata?.display_name || user.user_metadata?.full_name || user.email?.split('@')[0] || 'Reader');
+      setCurrentUser({name:fallbackName,email:user.email || '',role:'Reader',avatar:''});
+      setIsAuthenticated(true);
+      setAuthLoading(false);
       try {
         const db = database();
         const result = await db.from('profiles').select('display_name, settings').eq('id',user.id).maybeSingle();
@@ -129,7 +150,7 @@ export const ReadingProvider: React.FC<{ children: React.ReactNode }> = ({ child
           profile=loaded.data;
         }
         if(!alive || run!==generation) return;
-        setCurrentUser({name:profile.display_name || String(user.user_metadata?.full_name || 'Reader'),email:user.email || '',role:'Reader',avatar:''});
+        setCurrentUser({name:profile.display_name || fallbackName,email:user.email || '',role:'Reader',avatar:''});
         const shelf=await db.from('bookshelf').select('book_id').eq('user_id',user.id);
         if(shelf.error) throw shelf.error;
         if(!alive || run!==generation) return;
@@ -143,12 +164,12 @@ export const ReadingProvider: React.FC<{ children: React.ReactNode }> = ({ child
           ...(['narrow','normal','wide'].includes(settings.columnWidth)?{columnWidth:settings.columnWidth}:{})
         }));
         setIsAuthenticated(true); setIsAuthModalOpen(false);
+        if (!firstAuthEvent && event === 'SIGNED_IN') notify({level:'success',title:'You’re signed in',message:'Your shelf is ready.'});
       } catch(error) { if(alive && run===generation) setAuthError(userError(error,'We couldn’t connect to your account. Please sign in again.')); }
       finally { if(alive && run===generation) setAuthLoading(false); }
     };
     const {data:{subscription}} = supabase.auth.onAuthStateChange((event,session)=> {
-      if(event==='TOKEN_REFRESHED' && session?.user.id===previousUserId)return;
-      queueMicrotask(()=> {if(alive) void sync(session?.user || null);});
+      queueMicrotask(()=> {if(alive) void sync(session?.user || null,event);});
     });
     return ()=> {alive=false;generation++;subscription.unsubscribe();};
   },[]);
@@ -156,6 +177,17 @@ export const ReadingProvider: React.FC<{ children: React.ReactNode }> = ({ child
   // Search & Filter
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All Shelves');
+
+  const navigateTo = (view: ViewState, resetScroll = true) => {
+    if (view === currentView) return;
+    try{localStorage.setItem('openshelf_current_view',view);}catch{/* The in-memory route still works when storage is unavailable. */}
+    const motionReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const documentWithTransitions = document as Document & { startViewTransition?: (update: () => void) => unknown };
+    if (!motionReduced && documentWithTransitions.startViewTransition) {
+      documentWithTransitions.startViewTransition(() => flushSync(() => setCurrentView(view)));
+    } else setCurrentView(view);
+    if (resetScroll) window.scrollTo({ top: 0, behavior: motionReduced ? 'auto' : 'smooth' });
+  };
 
   const updateReadingSettings = (newSettings:Partial<ReadingSettings>) => {
     const updated={...readingSettings,...newSettings};setReadingSettings(updated);
@@ -165,13 +197,15 @@ export const ReadingProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   const openBookDetail = (book: Book) => {
     setSelectedBook(book);
-    setCurrentView('book-detail');
+    try{localStorage.setItem('openshelf_selected_book',JSON.stringify(book));}catch{/* The in-memory selection still works when storage is unavailable. */}
+    navigateTo('book-detail', false);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const openReader = (book: Book) => {
     setSelectedBook(book);
-    setCurrentView('reader');
+    try{localStorage.setItem('openshelf_selected_book',JSON.stringify(book));}catch{/* The in-memory selection still works when storage is unavailable. */}
+    navigateTo('reader', false);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -208,7 +242,7 @@ export const ReadingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     <ReadingContext.Provider
       value={{
         currentView,
-        setCurrentView,
+        setCurrentView: navigateTo,
         selectedBook,
         setSelectedBook,
         openBookDetail,
